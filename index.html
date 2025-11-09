@@ -17,7 +17,6 @@
     .timebox strong{display:block;font-size:20px;margin-top:8px}
     .footer{margin-top:14px;color:var(--muted);font-size:13px;text-align:center}
 
-    /* Highlight current prayer */
     .timebox.current {
       background: linear-gradient(90deg, rgba(6,182,212,0.25), rgba(96,165,250,0.25));
       border: 1px solid rgba(6,182,212,0.6);
@@ -28,25 +27,10 @@
     .timebox.current h3 { color: #fff; font-weight: 600; transition: color 1s ease; }
     .timebox.current strong { color: #fff; text-shadow: 0 0 6px rgba(6,182,212,0.6); transition: color 1s ease, text-shadow 1s ease; }
 
-    /* Progress bar */
-    .progress-bar {
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      height: 4px;
-      background: var(--accent);
-      width: 0%;
-      transition: width 1s linear;
-    }
+    .progress-bar { position: absolute; bottom: 0; left: 0; height: 4px; background: var(--accent); width: 0%; transition: width 1s linear; }
+    .countdown { margin-top: 6px; font-size: 13px; color: var(--accent); font-weight: 500; transition: all 1s ease; }
 
-    /* Countdown */
-    .countdown {
-      margin-top: 6px;
-      font-size: 13px;
-      color: var(--accent);
-      font-weight: 500;
-      transition: all 1s ease;
-    }
+    .btn-adhan {margin-top:10px; padding:6px 12px; border:none; border-radius:6px; background:var(--accent); color:#fff; cursor:pointer; font-weight:500;}
   </style>
 </head>
 <body>
@@ -59,20 +43,33 @@
         </svg>
         <div>
           <h1>Horaires de prière — Marseille</h1>
-          <div style="color:var(--muted);font-size:13px">Données depuis l’API Aladhan, mise à jour automatique et notifications 10 min avant chaque prière.</div>
+          <div style="color:var(--muted);font-size:13px">Données depuis l’API Aladhan, mise à jour automatique, notifications et Adhan.</div>
         </div>
       </div>
     </header>
 
     <div class="card" style="margin-top:14px">
+      <button class="btn-adhan" id="enableAdhan">Activer l'Adhan</button>
       <div class="times" id="times"></div>
       <div class="footer">Source : Aladhan API — Position : Marseille, France 🇫🇷</div>
     </div>
   </div>
 
+  <audio id="adhanAudio" src="adhan.mp3" preload="auto"></audio>
+
   <script>
     const timesDiv = document.getElementById('times');
+    const adhanAudio = document.getElementById('adhanAudio');
+    let adhanEnabled = false;
     let lastTimings = null;
+    const enableBtn = document.getElementById('enableAdhan');
+
+    enableBtn.addEventListener('click', () => {
+      adhanEnabled = true;
+      enableBtn.disabled = true;
+      enableBtn.textContent = "Adhan activé";
+      adhanAudio.play().then(() => adhanAudio.pause());
+    });
 
     if ('Notification' in window && Notification.permission !== 'granted') {
       Notification.requestPermission();
@@ -80,14 +77,24 @@
 
     let currentTimers = [];
 
+    function playAdhan() {
+      if (adhanEnabled) {
+        adhanAudio.currentTime = 0;
+        adhanAudio.play().catch(err => console.log('Erreur lecture Adhan:', err));
+      }
+    }
+
     function scheduleNotifications(timings, dateStr) {
       for (const t of currentTimers) clearTimeout(t);
       currentTimers = [];
+
       const now = new Date();
       for (const [name, timeStr] of Object.entries(timings)) {
         if (!['Fajr','Dhuhr','Asr','Maghrib','Isha'].includes(name)) continue;
         const [h, m] = timeStr.split(':').map(Number);
         const prayerTime = new Date(`${dateStr}T${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:00`);
+
+        // Notification 10 min avant
         const notifyTime = new Date(prayerTime.getTime() - 10 * 60000);
         const delay = notifyTime - now;
         if (delay > 0) {
@@ -97,6 +104,13 @@
             }
           }, delay);
           currentTimers.push(timer);
+        }
+
+        // Jouer Adhan à l'heure exacte
+        const playDelay = prayerTime - now;
+        if (playDelay > 0) {
+          const adhanTimer = setTimeout(playAdhan, playDelay);
+          currentTimers.push(adhanTimer);
         }
       }
     }
